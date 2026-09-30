@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Organizador de Curtidas</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='48' fill='%231ed760'/><text x='50' y='68' font-size='52' text-anchor='middle' fill='%23000'>♪</text></svg>">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand"><span class="logo">♪</span> Organizador de Curtidas</div>
+    <div id="user" class="user" hidden>
+      <img id="userImg" alt="">
+      <span id="userName"></span>
+      <button id="logoutBtn" class="btn ghost sm">Sair</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- ============ CONFIGURAÇÃO / LOGIN ============ -->
+    <section id="setup" hidden>
+      <h1>Organize suas músicas curtidas em playlists</h1>
+      <p class="lead">Conecte sua conta do Spotify, escolha um critério (gênero, artista, década…) e o site cria as playlists para você.</p>
+
+      <div class="card">
+        <h2>Configuração (só na primeira vez)</h2>
+        <ol class="steps">
+          <li>Abra o <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">painel de desenvolvedor do Spotify</a> e clique em <b>Create app</b>.</li>
+          <li>Preencha nome e descrição como quiser. Em <b>Redirect URIs</b>, cole exatamente este endereço e clique em <b>Add</b>:
+            <div class="copyrow"><code id="redirectUri"></code><button id="copyRedirect" class="btn ghost sm">Copiar</button></div>
+          </li>
+          <li>Em <b>Which API/SDKs are you planning to use?</b>, marque <b>Web API</b>, aceite os termos e salve.</li>
+          <li>Na página do app, copie o <b>Client ID</b> e cole abaixo.</li>
+        </ol>
+        <p class="note">O Spotify exige que o dono do app tenha conta <b>Premium</b> para usar o modo de desenvolvimento. Nele, o app funciona para você e para até 5 contas que você cadastrar em <b>User Management</b>.</p>
+
+        <label class="field">
+          <span>Client ID</span>
+          <input id="clientId" type="text" placeholder="ex.: 3f2a9c…" autocomplete="off" spellcheck="false">
+        </label>
+        <button id="loginBtn" class="btn primary">Conectar com Spotify</button>
+        <p id="setupError" class="error" hidden></p>
+
+        <details class="help">
+          <summary>O Spotify mostrou "Invalid redirect URI" ou "Not matching configuration"?</summary>
+          <p>O endereço em <b>Redirect URIs</b> no painel do app precisa ser idêntico, caractere por caractere, a
+            <code class="redirectUriText"></code>, com <b>http://</b>, <b>127.0.0.1</b>, a porta <b>:8888</b> e a <b>/</b> no final.
+            O Spotify não aceita <b>localhost</b> e exige HTTPS para o IP da sua rede (192.168…), então use sempre 127.0.0.1.</p>
+          <p>Se você cadastrou um pouco diferente (por exemplo, sem a <b>/</b> no final), digite aqui exatamente o que está no painel:</p>
+          <input id="redirectOverride" type="text" placeholder="deixe vazio para usar o padrão" autocomplete="off" spellcheck="false">
+        </details>
+      </div>
+      <p class="privacy">🔒 Tudo roda no seu navegador. Seu login só é usado com o próprio Spotify. Para descobrir gêneros, apenas nomes de artistas e músicas são pesquisados no Deezer e no MusicBrainz.</p>
+    </section>
+
+    <!-- ============ APLICATIVO ============ -->
+    <section id="app" hidden>
+      <div class="card library">
+        <div>
+          <div class="stat"><span id="statTracks">–</span> músicas curtidas</div>
+          <div class="sub"><span id="statArtists">–</span> artistas · <span id="statUpdated">nunca carregado</span></div>
+        </div>
+        <button id="reloadBtn" class="btn ghost">Recarregar curtidas</button>
+      </div>
+
+      <div id="progress" class="card progress" hidden>
+        <div class="progress-head">
+          <span id="progressLabel">Carregando…</span>
+          <button id="cancelBtn" class="btn ghost sm" hidden>Cancelar</button>
+        </div>
+        <div class="bar"><div id="progressBar"></div></div>
+      </div>
+
+      <!-- Passo 1 -->
+      <div class="card">
+        <h2><span class="num">1</span> Como você quer organizar?</h2>
+        <div id="modes" class="modes">
+          <label class="mode"><input type="radio" name="mode" value="genre" checked>
+            <b>Gênero</b><small>Rock, Pop, Sertanejo, Funk, MPB… pesquisados no Spotify, Deezer e MusicBrainz</small></label>
+          <label class="mode"><input type="radio" name="mode" value="genreDetail">
+            <b>Gênero detalhado</b><small>Os subgêneros do Spotify, como "indie rock brasileiro"</small></label>
+          <label class="mode"><input type="radio" name="mode" value="artist">
+            <b>Artista</b><small>Uma playlist para cada artista</small></label>
+          <label class="mode"><input type="radio" name="mode" value="decade">
+            <b>Década de lançamento</b><small>Anos 80, Anos 90, Anos 2000…</small></label>
+          <label class="mode"><input type="radio" name="mode" value="year">
+            <b>Ano de lançamento</b><small>Uma playlist para cada ano</small></label>
+          <label class="mode"><input type="radio" name="mode" value="added">
+            <b>Ano em que curti</b><small>Relembre cada fase da sua vida</small></label>
+        </div>
+
+        <div class="options">
+          <label class="field inline">
+            <span>Mínimo de músicas por playlist</span>
+            <input id="optMin" type="number" min="1" value="10">
+          </label>
+          <label class="field inline">
+            <span>Prefixo no nome (opcional)</span>
+            <input id="optPrefix" type="text" placeholder="ex.: ❤ " maxlength="30">
+          </label>
+          <label class="check">
+            <input id="optOthers" type="checkbox" checked>
+            <span>Juntar os grupos pequenos numa playlist "Outros"</span>
+          </label>
+        </div>
+        <button id="generateBtn" class="btn primary">Gerar sugestões</button>
+        <p id="genreWarn" class="note" hidden></p>
+      </div>
+
+      <!-- Passo 2 -->
+      <div id="review" class="card" hidden>
+        <h2><span class="num">2</span> Revise as playlists</h2>
+        <p class="sub">Renomeie, desmarque o que não quiser, junte grupos ou tire músicas de um grupo antes de criar.</p>
+        <div class="toolbar">
+          <input id="filter" type="search" placeholder="Filtrar grupos…">
+          <button id="selAll" class="btn ghost sm">Marcar todas</button>
+          <button id="selNone" class="btn ghost sm">Desmarcar todas</button>
+          <span id="summary" class="summary"></span>
+        </div>
+        <div id="groups" class="groups"></div>
+      </div>
+
+      <!-- Passo 3 -->
+      <div id="createCard" class="card" hidden>
+        <h2><span class="num">3</span> Criar no Spotify</h2>
+        <label class="check">
+          <input id="optPublic" type="checkbox">
+          <span>Deixar as playlists públicas</span>
+        </label>
+        <label class="check">
+          <input id="optReuse" type="checkbox" checked>
+          <span>Se eu já tiver uma playlist com o mesmo nome, só adicionar as músicas que faltam (em vez de criar outra)</span>
+        </label>
+        <button id="createBtn" class="btn primary">Criar playlists</button>
+        <ul id="log" class="log"></ul>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" hidden></div>
+  <script src="app.js"></script>
+</body>
+</html>
